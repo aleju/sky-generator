@@ -46,9 +46,9 @@ function models.create_G_decoder(dimensions, noiseDim)
     local activation = nn.PReLU
   
     local model = nn.Sequential()
-    model:add(nn.Linear(noiseDim, 1024))
+    model:add(nn.Linear(noiseDim, 4096))
     model:add(activation())
-    model:add(nn.Linear(1024, inputSz))
+    model:add(nn.Linear(4096, inputSz))
     model:add(nn.Sigmoid())
     model:add(nn.View(dimensions[1], dimensions[2], dimensions[3]))
 
