@@ -46,9 +46,9 @@ function models.create_G_decoder(dimensions, noiseDim)
     local activation = nn.PReLU
   
     local model = nn.Sequential()
-    model:add(nn.Linear(noiseDim, 4096))
+    model:add(nn.Linear(noiseDim, 1024))
     model:add(activation())
-    model:add(nn.Linear(4096, inputSz))
+    model:add(nn.Linear(1024, inputSz))
     model:add(nn.Sigmoid())
     model:add(nn.View(dimensions[1], dimensions[2], dimensions[3]))
 
@@ -80,7 +80,7 @@ function models.create_D(dimensions, cuda)
     if dimensions[2] == 16 then
         return models.create_D16(dimensions, cuda)
     else
-        return models.create_D32b(dimensions, cuda)
+        return models.create_D32c(dimensions, cuda)
     end
 end
 
@@ -192,6 +192,48 @@ function models.create_D32b(dimensions, cuda)
     conv:add(nn.PReLU())
     conv:add(nn.Dropout())
     conv:add(nn.Linear(1024, 1))
+    conv:add(nn.Sigmoid())
+
+    if cuda then
+        conv:add(nn.Copy('torch.CudaTensor', 'torch.FloatTensor', true, true))
+        conv:cuda()
+    end
+
+    conv = require('weight-init')(conv, 'heuristic')
+
+    return conv
+end
+
+function models.create_D32c(dimensions, cuda)
+    local conv = nn.Sequential()
+    if cuda then
+        conv:add(nn.Copy('torch.FloatTensor', 'torch.CudaTensor', true, true))
+    end
+    
+    conv:add(nn.SpatialConvolution(dimensions[1], 128, 3, 3, 1, 1, (3-1)/2))
+    conv:add(nn.PReLU())
+    conv:add(nn.SpatialAveragePooling(2, 2, 2, 2))
+    conv:add(nn.SpatialConvolution(128, 128, 3, 3, 1, 1, (3-1)/2))
+    conv:add(nn.PReLU())
+    conv:add(nn.SpatialMaxPooling(2, 2))
+    conv:add(nn.Dropout())
+    
+    conv:add(nn.SpatialConvolution(128, 256, 5, 5, 1, 1, (5-1)/2))
+    conv:add(nn.PReLU())
+    conv:add(nn.SpatialConvolution(256, 256, 5, 5, 1, 1, (5-1)/2))
+    conv:add(nn.PReLU())
+    conv:add(nn.SpatialMaxPooling(2, 2))
+    conv:add(nn.SpatialConvolution(256, 256, 5, 5, 1, 1, (5-1)/2))
+    conv:add(nn.PReLU())
+    conv:add(nn.SpatialDropout())
+    conv:add(nn.View(256 * 0.25 * 0.25 * 0.25 * dimensions[2] * dimensions[3]))
+    conv:add(nn.Linear(256 * 0.25 * 0.25 * 0.25 * dimensions[2] * dimensions[3], 512))
+    conv:add(nn.PReLU())
+    conv:add(nn.Dropout())
+    conv:add(nn.Linear(512, 512))
+    conv:add(nn.PReLU())
+    conv:add(nn.Dropout())
+    conv:add(nn.Linear(512, 1))
     conv:add(nn.Sigmoid())
 
     if cuda then
