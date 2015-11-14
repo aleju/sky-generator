@@ -288,6 +288,17 @@ function nn_utils.normalize(data, mean_, std_)
     return 0.5, 0.5
 end
 
+function nn_utils.getNumberOfParameters(net)
+    local nparams = 0
+    local dModules = net:listModules()
+    for i=1,#dModules do
+        if dModules[i].weight ~= nil then
+            nparams = nparams + dModules[i].weight:nElement()
+        end
+    end
+    return nparams
+end
+
 -- Contains the pixels necessary to draw digits 0 to 9
 CHAR_TENSORS = {}
 CHAR_TENSORS[0] = torch.Tensor({{1, 1, 1},

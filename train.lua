@@ -189,6 +189,10 @@ function main()
     print(MODEL_G)
     print(MODEL_D)
 
+    -- count free parameters in D/G
+    print(string.format('Number of free parameters in D: %d', NN_UTILS.getNumberOfParameters(MODEL_D)))
+    print(string.format('Number of free parameters in G: %d', NN_UTILS.getNumberOfParameters(MODEL_G)))
+
     if OPT.autoencoder == "" then
         print("[INFO] No Autoencoder network specified, will not use an autoencoder.")
     else
