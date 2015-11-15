@@ -49,6 +49,7 @@ OPT = lapp[[
   --aws                                     run in AWS mode
 ]]
 
+NORMALIZE = false
 START_TIME = os.time()
 
 if OPT.gpu < 0 or OPT.gpu > 3 then OPT.gpu = false end
@@ -128,9 +129,10 @@ function main()
         MODEL_G = tmp.G
         OPTSTATE = tmp.optstate
         EPOCH = tmp.epoch
-        -- Normalization is deactivated for now
-        -- NORMALIZE_MEAN = tmp.normalize_mean
-        -- NORMALIZE_STD = tmp.normalize_std
+        if NORMALIZE then
+            NORMALIZE_MEAN = tmp.normalize_mean
+            NORMALIZE_STD = tmp.normalize_std
+        end
         
         if OPT.gpu == false then
             MODEL_D:float()
@@ -261,11 +263,12 @@ function main()
         }
     end
 
-    -- Old stuff to normalize the images.
-    --if NORMALIZE_MEAN == nil then
-    --    TRAIN_DATA = DATASET.loadRandomImages(10000)
-    --    NORMALIZE_MEAN, NORMALIZE_STD = TRAIN_DATA.normalize()
-    --end
+    if NORMALIZE then
+        if NORMALIZE_MEAN == nil then
+            TRAIN_DATA = DATASET.loadRandomImages(10000)
+            NORMALIZE_MEAN, NORMALIZE_STD = TRAIN_DATA.normalize()
+        end
+    end
 
     if EPOCH == nil then
         EPOCH = 1
@@ -277,7 +280,9 @@ function main()
     while true do
         print('Loading new training data...')
         TRAIN_DATA = DATASET.loadRandomImages(OPT.N_epoch)
-        --TRAIN_DATA.normalize(NORMALIZE_MEAN, NORMALIZE_STD)
+        if NORMALIZE then
+            TRAIN_DATA.normalize(NORMALIZE_MEAN, NORMALIZE_STD)
+        end
 
         -- Show images and plots if requested
         if not OPT.noplot then

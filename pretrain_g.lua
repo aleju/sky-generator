@@ -28,6 +28,8 @@ OPT = lapp[[
     --noiseDim      (default 100)
 ]]
 
+NORMALIZE = true
+
 if OPT.gpu < 0 or OPT.gpu > 3 then OPT.gpu = false end
 print(OPT)
 
@@ -93,17 +95,22 @@ function main()
     -- Initialize adam state
     OPTSTATE = {adam={}}
     
-    -- scaffold for normalization
-    --TRAIN_DATA = DATASET.loadRandomImages(10000)
-    --NORMALIZE_MEAN, NORMALIZE_STD = TRAIN_DATA.normalize()
+    if NORMALIZE then
+        TRAIN_DATA = DATASET.loadRandomImages(10000)
+        NORMALIZE_MEAN, NORMALIZE_STD = TRAIN_DATA.normalize()
+    end
     
     -- training loop
     EPOCH = 1
     while true do
         print(string.format("<trainer> Epoch %d", EPOCH))
         TRAIN_DATA = DATASET.loadRandomImages(OPT.N_epoch)
-        --TRAIN_DATA.normalize(NORMALIZE_MEAN, NORMALIZE_STD)
+        if NORMALIZE then
+            TRAIN_DATA.normalize(NORMALIZE_MEAN, NORMALIZE_STD)
+        end
+        
         epoch()
+        
         if not OPT.noplot then
             visualizeProgress()
         end
@@ -209,6 +216,10 @@ function visualizeProgress()
     -- Load some images
     -- we will only test here on potential training images
     local imagesReal = DATASET.loadRandomImages(100)
+    if NORMALIZE then
+        imagesReal.normalize(NORMALIZE_MEAN, NORMALIZE_STD)
+    end
+    
     -- Convert them to a tensor (instead of list of tensors),
     -- :forward() and display (DISP) want that
     local imagesRealTensor = torch.Tensor(imagesReal:size(), IMG_DIMENSIONS[1], IMG_DIMENSIONS[2], IMG_DIMENSIONS[3])
