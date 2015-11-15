@@ -69,6 +69,9 @@ function dataset.loadPaths()
             end
         end
 
+        -- sort for reproduceability
+        table.sort(files, function (a,b) return a < b end)
+
         -- Check files
         if #files == 0 then
             error('given directory doesnt contain any files of type: ' .. ext)
