@@ -16,7 +16,8 @@ dataset.originalWidth = 64
 dataset.height = 16
 dataset.width = 32
 -- desired channels of images (1=grayscale, 3=color)
-dataset.nbChannels = 3
+--dataset.nbChannels = 3
+dataset.colorSpace = "rgb"
 
 -- cache for filepaths to all images
 dataset.paths = nil
@@ -92,12 +93,13 @@ function dataset.loadImages(startAt, count)
     end
 
     local N = math.min(count, #dataset.paths)
-    local images = torch.FloatTensor(N, dataset.nbChannels, dataset.height, dataset.width)
+    local images = torch.FloatTensor(N, 3, dataset.height, dataset.width)
     for i=1,N do
         local img = image.load(dataset.paths[i], dataset.nbChannels, "float")
         img = image.scale(img, dataset.width, dataset.height)
         images[i] = img
     end
+    images = NN_UTILS.rgbToColorSpace(images, dataset.colorSpace)
 
     local result = {}
     result.data = images
@@ -120,10 +122,11 @@ end
 -- @return List of Tensors
 function dataset.loadRandomImages(count)
     local images = dataset.loadRandomImagesFromPaths(count)
-    local data = torch.FloatTensor(#images, dataset.nbChannels, dataset.height, dataset.width)
+    local data = torch.FloatTensor(#images, 3, dataset.height, dataset.width)
     for i=1, #images do
         data[i] = image.scale(images[i], dataset.width, dataset.height)
     end
+    data = NN_UTILS.rgbToColorSpace(data, dataset.colorSpace)
 
     local N = data:size(1)
     local result = {}
@@ -160,7 +163,7 @@ function dataset.loadRandomImagesFromPaths(count)
     local images = {}
     for i=1,math.min(shuffle:size(1), count) do
        -- load each image
-       table.insert(images, image.load(dataset.paths[shuffle[i]], dataset.nbChannels, "float"))
+       table.insert(images, image.load(dataset.paths[shuffle[i]], 3, "float"))
     end
     
     return images

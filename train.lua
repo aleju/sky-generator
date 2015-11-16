@@ -41,15 +41,18 @@ OPT = lapp[[
   --noiseDim         (default 100)          dimensionality of noise vector
   --window           (default 3)            window id of sample image
   --scale            (default 16)           scale of images to train on
-  --grayscale                               grayscale mode on/off
   --autoencoder      (default "")           path to autoencoder to load weights from
   --rebuildOptstate  (default 0)            whether to force a rebuild of the optimizer state
   --seed             (default 1)            seed for the RNG
   --weightsVisFreq   (default 0)            how often to update the weight visualization (requires starting with qlua, 0 is off)
   --aws                                     run in AWS mode
+  --colorspace       (default "rgb")        rgb|yuv|hsl|y
 ]]
 
 NORMALIZE = false
+if OPT.colorspace == "y" then
+    OPT.grayscale = true
+end
 START_TIME = os.time()
 
 if OPT.gpu < 0 or OPT.gpu > 3 then OPT.gpu = false end
@@ -80,7 +83,8 @@ INPUT_SZ = IMG_DIMENSIONS[1] * IMG_DIMENSIONS[2] * IMG_DIMENSIONS[3]
 ----------------------------------------------------------------------
 -- get/create dataset
 ----------------------------------------------------------------------
-DATASET.nbChannels = IMG_DIMENSIONS[1]
+--DATASET.nbChannels = IMG_DIMENSIONS[1]
+DATASET.colorSpace = OPT.colorspace
 DATASET.setFileExtension("jpg")
 DATASET.setHeight(OPT.scale)
 DATASET.setWidth(OPT.scale * 2)

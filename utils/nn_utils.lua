@@ -80,7 +80,7 @@ function nn_utils.sortImagesByPrediction(images, ascending, nbMaxOut)
     for i=1,nBatches do
         local batchStart = 1 + (i-1)*OPT.batchSize
         local batchEnd = math.min(i*OPT.batchSize, images:size(1))
-        predictions[{{batchStart, batchEnd}, {1}}] = MODEL_D:forward(images[{{batchStart, batchEnd}, {}, {}, {}}])
+        predictions[{{batchStart, batchEnd}, {1}}] = MODEL_D:forward(images[{{batchStart, batchEnd}, {}, {}, {}}]):clone()
     end
     
     local imagesWithPreds = {}
@@ -119,17 +119,6 @@ function nn_utils.visualizeProgress(noiseInputs)
     -- deactivate dropout
     nn_utils.switchToEvaluationMode()
     
-    -- Generate images from G based on the provided noiseInputs
-    local semiRandomImagesRefined = nn_utils.createImagesFromNoise(noiseInputs, true, true)
-    --print(semiRandomImagesRefined[2])
-    --print(TRAIN_DATA[1])
-    
-    for i=1,#semiRandomImagesRefined do
-        if semiRandomImagesRefined[i]:ne(semiRandomImagesRefined[i]):sum() > 0 then
-            print(string.format("[nn_utils vizProgress] Generated image %d contains NaNs", i))
-        end
-    end
-    
     -- Generate a synthetic test image as sanity test
     -- This should be deemed very bad by D
     local sanityTestImage = torch.Tensor(IMG_DIMENSIONS[1], IMG_DIMENSIONS[2], IMG_DIMENSIONS[3])
@@ -145,52 +134,188 @@ function nn_utils.visualizeProgress(noiseInputs)
     end
     
     -- Collect original example images from the training set
-    local trainImages = torch.Tensor(50, IMG_DIMENSIONS[1], IMG_DIMENSIONS[2], IMG_DIMENSIONS[3])
-    for i=1,50 do
-        trainImages[i] = TRAIN_DATA[i]
-    end
+    local trainImages = TRAIN_DATA[{{1, 50}, {}, {}, {}}]:clone()
     
-    -- convert list of tensors to one tensor
-    local semiRandomImagesRefinedTensor = torch.Tensor(#semiRandomImagesRefined, IMG_DIMENSIONS[1], IMG_DIMENSIONS[2], IMG_DIMENSIONS[3])
-    for i=1,#semiRandomImagesRefined do
-        semiRandomImagesRefinedTensor[i] = semiRandomImagesRefined[i]
-    end
-    
-    -- Create random images images, they will split into good and bad images
-    local randomImages = semiRandomImagesRefinedTensor -- nn_utils.createImages(300, false)
+    -- Generate images from G based on the provided noiseInputs
+    local rndImages = nn_utils.createImagesFromNoise(noiseInputs)
     
     -- Place the sanity test image and one original image from the training corpus among
     -- the random Images. The first should be deemed bad by D, the latter as good.
-    randomImages[randomImages:size(1)-1] = TRAIN_DATA[1] -- one real face as sanity test
-    randomImages[randomImages:size(1)] = sanityTestImage -- synthetic non-face as sanity test
+    -- Then find good and bad images (according to D) among the randomly generated ones
+    -- Note: has to happen before toRgb() as that would change the color space of the images
+    local rndImagesClone = rndImages:clone()
+    rndImagesClone[rndImagesClone:size(1)-1] = trainImages[1] -- one real face as sanity test
+    rndImagesClone[rndImagesClone:size(1)] = sanityTestImage -- synthetic non-face as sanity test
+    local goodImages, _ = nn_utils.sortImagesByPrediction(rndImagesClone, false, 50)
+    local badImages, _ = nn_utils.sortImagesByPrediction(rndImagesClone, true, 50)
     
-    -- find bad images (according to D) among the randomly generated ones
-    local badImages, _ = nn_utils.sortImagesByPrediction(randomImages, true, 50)
-    
-    -- find good images (according to D) among the randomly generated ones
-    local goodImages, _ = nn_utils.sortImagesByPrediction(randomImages, false, 50)
+    if rndImages:ne(rndImages):sum() > 0 then
+        print(string.format("[nn_utils vizProgress] Generated images contain NaNs"))
+    end
 
-    local semiRandomImagesRefinedRating = nn_utils.rateWithV(semiRandomImagesRefined)
+    DISP.image(nn_utils.toRgb(rndImages, OPT.colorspace), {win=OPT.window+1, width=IMG_DIMENSIONS[3]*15, title="semi-random generated images (after G)"})
+    DISP.image(nn_utils.toRgb(goodImages, OPT.colorspace), {win=OPT.window+2, width=IMG_DIMENSIONS[3]*15, title="best samples (first is best)"})
+    DISP.image(nn_utils.toRgb(badImages, OPT.colorspace), {win=OPT.window+3, width=IMG_DIMENSIONS[3]*15, title="worst samples (first is worst)"})
+    DISP.image(nn_utils.toRgb(trainImages, OPT.colorspace), {win=OPT.window+4, width=IMG_DIMENSIONS[3]*15, title="original images from training set"})
+    
+    nn_utils.saveImagesAsGrid(string.format("%s/images/%d_%05d.png", OPT.save, START_TIME, EPOCH), nn_utils.toRgb(rndImages, OPT.colorspace), 10, 10, EPOCH)
+    nn_utils.saveImagesAsGrid(string.format("%s/images_good/%d_%05d.png", OPT.save, START_TIME, EPOCH), nn_utils.toRgb(goodImages, OPT.colorspace), 7, 7, EPOCH)
+    nn_utils.saveImagesAsGrid(string.format("%s/images_bad/%d_%05d.png", OPT.save, START_TIME, EPOCH), nn_utils.toRgb(badImages, OPT.colorspace), 7, 7, EPOCH)
+    
+    local rndImagesRating = nn_utils.rateWithV(rndImages)
     local goodImagesRating = nn_utils.rateWithV(goodImages)
     local badImagesRating = nn_utils.rateWithV(badImages)
-    table.insert(PLOT_DATA, {EPOCH, semiRandomImagesRefinedRating, goodImagesRating, badImagesRating})
-
-    if semiRandomImagesUnrefined then
-        DISP.image(semiRandomImagesUnrefined, {win=OPT.window, width=IMG_DIMENSIONS[3]*15, title="semi-random generated images (before G)"})
-    end
-    DISP.image(semiRandomImagesRefined, {win=OPT.window+1, width=IMG_DIMENSIONS[3]*15, title="semi-random generated images (after G)"})
-    DISP.image(goodImages, {win=OPT.window+2, width=IMG_DIMENSIONS[3]*15, title="best samples (first is best)"})
-    DISP.image(badImages, {win=OPT.window+3, width=IMG_DIMENSIONS[3]*15, title="worst samples (first is worst)"})
-    DISP.image(trainImages, {win=OPT.window+4, width=IMG_DIMENSIONS[3]*15, title="original images from training set"})
-    print(string.format("<nnutils viz> [V] semiRandom: %.4f, goodImages: %.4f, badImages: %.4f", semiRandomImagesRefinedRating, goodImagesRating, badImagesRating))
+    table.insert(PLOT_DATA, {EPOCH, rndImagesRating, goodImagesRating, badImagesRating})
+    print(string.format("<nnutils viz> [V] semiRandom: %.4f, goodImages: %.4f, badImages: %.4f", rndImagesRating, goodImagesRating, badImagesRating))
     DISP.plot(PLOT_DATA, {win=OPT.window+5, labels={'epoch', 'V(semiRandom)', 'V(goodImages)', 'V(badImages)'}, title='Rating by V'})
-    
-    nn_utils.saveImagesAsGrid(string.format("%s/images/%d_%05d.png", OPT.save, START_TIME, EPOCH), semiRandomImagesRefined, 10, 10, EPOCH)
-    nn_utils.saveImagesAsGrid(string.format("%s/images_good/%d_%05d.png", OPT.save, START_TIME, EPOCH), goodImages, 7, 7, EPOCH)
-    nn_utils.saveImagesAsGrid(string.format("%s/images_bad/%d_%05d.png", OPT.save, START_TIME, EPOCH), badImages, 7, 7, EPOCH)
     
     -- reactivate dropout
     nn_utils.switchToTrainingMode()
+end
+
+function nn_utils.toRgb(images, from)
+    local images = nn_utils.toImageTensor(images)
+    if from == "rgb" then
+        return images
+    elseif from == "y" then
+        --[[
+        local imagesTmp
+        if images:size(4) == nil then
+            imagesTmp = images:clone()
+        else
+            imagesTmp = images:clone():squeeze(2)
+        end
+        
+        local N = imagesTmp:size(1)
+        local height = imagesTmp:size(2)
+        local width = imagesTmp:size(3)
+        --]]
+        return torch.repeatTensor(images, 1, 3, 1, 1)
+    elseif from == "hsl" then
+        local out = torch.Tensor(images:size(1), 3, images:size(3), images:size(4))
+        for i=1,images:size(1) do
+            out[i] = image.hsl2rgb(images[i])
+        end
+        return out
+    elseif from == "yuv" then
+        local out = torch.Tensor(images:size(1), 3, images:size(3), images:size(4))
+        for i=1,images:size(1) do
+            out[i] = image.yuv2rgb(images[i])
+        end
+        return out
+    else
+        print("[WARNING] unknown color space <from>: '" .. from .. "'")
+    end
+end
+
+function nn_utils.rgbToColorSpace(images, colorSpace)
+    if colorSpace == "rgb" then
+        return images
+    else
+        if colorSpace == "y" then
+            local out = torch.Tensor(images:size(1), 1, images:size(3), images:size(4))
+            for i=1,images:size(1) do
+                out[i] = nn_utils.rgb2y(images[i])
+            end
+            return out
+        elseif colorSpace == "hsl" then
+            local out = torch.Tensor(images:size(1), 3, images:size(3), images:size(4))
+            for i=1,images:size(1) do
+                out[i] = image.rgb2hsl(images[i])
+            end
+            return out
+        elseif colorSpace == "yuv" then
+            local out = torch.Tensor(images:size(1), 3, images:size(3), images:size(4))
+            for i=1,images:size(1) do
+                out[i] = image.rgb2yuv(images[i])
+            end
+            return out
+        else
+            print("[WARNING] unknown color space in rgbToColorSpace: '" .. colorSpace .. "'")
+        end
+    end
+end
+
+-- convert rgb to grayscale by averaging channel intensities
+-- https://gist.github.com/jkrish/29ca7302e98554dd0fcb
+function nn_utils.rgb2y(im, threeChannels)
+    -- Image.rgb2y uses a different weight mixture
+    local dim, w, h = im:size()[1], im:size()[2], im:size()[3]
+    if dim ~= 3 then
+        print('<error> expected 3 channels')
+        return im
+    end
+
+    -- a cool application of tensor:select
+    local r = im:select(1, 1)
+    local g = im:select(1, 2)
+    local b = im:select(1, 3)
+
+    local z = torch.Tensor(1, w, h):zero()
+
+    -- z = z + 0.21r
+    z = z:add(0.21, r)
+    z = z:add(0.72, g)
+    z = z:add(0.07, b)
+    
+    if threeChannels == true then
+        z = torch.repeatTensor(z, 3, 1, 1)
+    end
+    
+    return z
+end
+
+-- Convert a list (table) of images to a Tensor.
+-- If the parameter is already a tensor, it will be returned unchanged.
+-- @param imageList A non-empty list/table or tensor of images (each being a tensor).
+-- @returns A tensor of shape (N, channels, height, width)
+function nn_utils.toImageTensor(imageList, forceChannel)
+    if imageList.size ~= nil then
+        if not forceChannel or (#imageList:size() == 3) then
+            return imageList
+        else
+            -- forceChannel activated and images lack channel dimension
+            -- add it
+            local tens = torch.Tensor(imageList:size(1), 1, imageList:size(2), imageList:size(3))
+            for i=1,imageList:size(1) do
+                tens[i][1] = imageList[i]
+            end
+            return tens
+        end
+    else
+        if forceChannel == nil then
+            forceChannel = false
+        end
+        
+        local hasChannel = (#imageList[1]:size() == 3)
+        
+        local tens
+        if hasChannel then
+            tens = torch.Tensor(#imageList, imageList[1]:size(1), imageList[1]:size(2), imageList[1]:size(3))
+        elseif not hasChannel and forceChannel then
+            tens = torch.Tensor(#imageList, 1, imageList[1]:size(1), imageList[1]:size(2))
+        else
+            tens = torch.Tensor(#imageList, imageList[1]:size(1), imageList[1]:size(2))
+        end
+        
+        for i=1,#imageList do
+            if (not hasChannel and forceChannel) then
+                tens[i][1] = imageList[i]
+            else
+                tens[i] = imageList[i]
+            end
+        end
+        return tens
+    end
+end
+
+function nn_utils.toImageList(imageTensor, forceChannel)
+    local tens = nn_utils.toImageTensor(imageTensor, forceChannel)
+    local lst = {}
+    for i=1,tens:size(1) do
+        table.insert(lst, tens[i])
+    end
+    return lst
 end
 
 -- Switch networks to training mode (activate Dropout)
@@ -342,29 +467,30 @@ CHAR_TENSORS[9] = torch.Tensor({{1, 1, 1},
 -- It will also place the epoch number at the bottom of the image.
 -- At least parts of this function probably should have been a simple call
 -- to image.toDisplayTensor().
--- @param images List of image tensors
+-- @param images Tensor of image tensors
 -- @param height Height of the grid
 -- @param width Width of the grid
 -- @param epoch The epoch number to draw at the bottom of the grid
 -- @returns tensor 
 function nn_utils.imagesToGridTensor(images, height, width, epoch)
+    local imgChannels = images:size(2)
     local imgHeightPx = IMG_DIMENSIONS[2]
     local imgWidthPx = IMG_DIMENSIONS[3]
     local heightPx = height * imgHeightPx + (1 + 5 + 1)
     local widthPx = width * imgWidthPx
-    local grid = torch.Tensor(IMG_DIMENSIONS[1], heightPx, widthPx)
+    local grid = torch.Tensor(imgChannels, heightPx, widthPx)
     grid:zero()
     
     -- add images to grid, one by one
     local yGridPos = 1
     local xGridPos = 1
-    for i=1,math.min(#images, height*width) do
+    for i=1,math.min(images:size(1), height*width) do
         -- set pixels of image
         local yStart = 1 + ((yGridPos-1) * imgHeightPx)
         local yEnd = yStart + imgHeightPx - 1
         local xStart = 1 + ((xGridPos-1) * imgWidthPx)
         local xEnd = xStart + imgWidthPx - 1
-        grid[{{1,IMG_DIMENSIONS[1]}, {yStart,yEnd}, {xStart,xEnd}}] = images[i]:float()
+        grid[{{1,imgChannels}, {yStart,yEnd}, {xStart,xEnd}}] = images[i]:float()
         
         -- move to next position in grid
         xGridPos = xGridPos + 1
@@ -379,7 +505,7 @@ function nn_utils.imagesToGridTensor(images, height, width, epoch)
     local pos = 1
     for i=epochStr:len(),1,-1 do
         local c = tonumber(epochStr:sub(i,i))
-        for channel=1,IMG_DIMENSIONS[1] do
+        for channel=1,imgChannels do
             local yStart = heightPx - 1 - 5 -- constant for all
             local yEnd = yStart + 5 - 1 -- constant for all
             local xStart = widthPx - 1 - pos*5 - pos
