@@ -11,8 +11,9 @@ random.seed(42)
 
 MAIN_DIR = os.path.dirname(os.path.realpath(__file__))
 
-# change this dir to your filepath
-DIRS = ["/media/aj/grab/ml/datasets/flickr-sky/orig"]
+# subdirectory which contains the downloaded images
+DIRS = ["orig"]
+#DIRS = ["/media/aj/grab/ml/datasets/flickr-sky/orig"]
 
 SCALE_HEIGHT = 32
 SCALE_WIDTH = 64
