@@ -28,7 +28,7 @@ OPT = lapp[[
     --noiseDim      (default 100)
 ]]
 
-NORMALIZE = true
+NORMALIZE = false
 
 if OPT.gpu < 0 or OPT.gpu > 3 then OPT.gpu = false end
 print(OPT)
@@ -85,6 +85,9 @@ function main()
     
     print("G autoencoder:")
     print(G_AUTOENCODER)
+    print(string.format('Number of free parameters in G (total): %d', NN_UTILS.getNumberOfParameters(G_AUTOENCODER)))
+    print(string.format('... encoder: %d', NN_UTILS.getNumberOfParameters(G_AUTOENCODER:get(2))))
+    print(string.format('... decoder: %d', NN_UTILS.getNumberOfParameters(G_AUTOENCODER:get(3))))
     
     -- Mean squared error criterion
     CRITERION = nn.MSECriterion()
