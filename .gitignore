@@ -1,3 +1,18 @@
+dataset/out_aug_32x64/*.jpg
+dataset/out_aug_32x64/*.png
+samples/*.jpg
+logs/*.net
+logs/*.net.old
+logs/*.bestnet
+logs/*.bestnet.old
+logs/*.log
+logs/images/*.jpg
+logs/images/*.png
+logs/images_good/*.jpg
+logs/images_good/*.png
+logs/images_bad/*.jpg
+logs/images_bad/*.png
+
 # Compiled Lua sources
 luac.out
 
