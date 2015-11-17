@@ -106,7 +106,6 @@ require 'cunn'
 require 'LeakyReLU'
 require 'dpnn'
 require 'layers.cudnnSpatialConvolutionUpsample'
-require 'stn'
 if OPT.gpu then
     cutorch.setDevice(OPT.gpu + 1)
     cutorch.manualSeed(OPT.seed)

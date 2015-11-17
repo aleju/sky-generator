@@ -3,7 +3,6 @@ require 'nn'
 require 'LeakyReLU'
 require 'dpnn'
 require 'layers.cudnnSpatialConvolutionUpsample'
-require 'stn'
 
 local models = {}
 
@@ -102,6 +101,10 @@ function models.create_G_decoder(dimensions, noiseDim)
     return model
 end
 
+-- Creates the decoder part of an upsampling height-16px G as an autoencoder.
+-- @param dimensions The dimensions of each image as {channels, height, width}.
+-- @param noiseDim Size of the hidden layer between encoder and decoder.
+-- @returns nn.Sequential
 function models.create_G_decoder_upsampling16(dimensions, noiseDim)
     local imgSize = dimensions[1] * dimensions[2] * dimensions[3]
   
@@ -130,6 +133,10 @@ function models.create_G_decoder_upsampling16(dimensions, noiseDim)
     return model
 end
 
+-- Creates the decoder part of an upsampling height-32px G as an autoencoder.
+-- @param dimensions The dimensions of each image as {channels, height, width}.
+-- @param noiseDim Size of the hidden layer between encoder and decoder.
+-- @returns nn.Sequential
 function models.create_G_decoder_upsampling32(dimensions, noiseDim)
     local imgSize = dimensions[1] * dimensions[2] * dimensions[3]
   
@@ -192,6 +199,10 @@ function models.create_G_autoencoder(dimensions, noiseDim)
     return model
 end
 
+-- Creates D.
+-- @param dimensions The dimensions of each image as {channels, height, width}.
+-- @param noiseDim Size of the hidden layer between encoder and decoder.
+-- @returns nn.Sequential
 function models.create_D(dimensions, cuda)
     if dimensions[2] == 16 then
         return models.create_D16b(dimensions, cuda)
@@ -200,7 +211,6 @@ function models.create_D(dimensions, cuda)
     end
 end
 
--- D1b
 function models.create_D16(dimensions, cuda)
     local conv = nn.Sequential()
     if cuda then
