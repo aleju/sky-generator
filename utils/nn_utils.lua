@@ -43,7 +43,19 @@ end
 -- @param outputAsList Whether to return the images as one list or as a tensor.
 -- @returns Either list of images (as returned by G/AE) or tensor of images
 function nn_utils.createImagesFromNoise(noiseInputs, outputAsList)
-    local images = MODEL_G:forward(noiseInputs):clone()
+    local images
+    local N = noiseInputs:size(1)
+    local nBatches = math.ceil(N/OPT.batchSize)
+    for i=1,nBatches do
+        local batchStart = 1 + (i-1)*OPT.batchSize
+        local batchEnd = math.min(i*OPT.batchSize, N)
+        local generated = MODEL_G:forward(noiseInputs[{{batchStart, batchEnd}}]):clone()
+        if images == nil then
+            local img = generated[1]
+            images = torch.Tensor(N, img:size(1), img:size(2), img:size(3))
+        end
+        images[{{batchStart, batchEnd}, {}, {}, {}}] = generated
+    end
     
     if outputAsList then
         local imagesList = {}
