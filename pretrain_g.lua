@@ -86,8 +86,13 @@ function main()
     print("G autoencoder:")
     print(G_AUTOENCODER)
     print(string.format('Number of free parameters in G (total): %d', NN_UTILS.getNumberOfParameters(G_AUTOENCODER)))
-    print(string.format('... encoder: %d', NN_UTILS.getNumberOfParameters(G_AUTOENCODER:get(2))))
-    print(string.format('... decoder: %d', NN_UTILS.getNumberOfParameters(G_AUTOENCODER:get(3))))
+    if OPT.gpu ~= false then
+        print(string.format('... encoder: %d', NN_UTILS.getNumberOfParameters(G_AUTOENCODER:get(1))))
+        print(string.format('... decoder: %d', NN_UTILS.getNumberOfParameters(G_AUTOENCODER:get(2))))
+    else
+        print(string.format('... encoder: %d', NN_UTILS.getNumberOfParameters(G_AUTOENCODER:get(2):get(1))))
+        print(string.format('... decoder: %d', NN_UTILS.getNumberOfParameters(G_AUTOENCODER:get(2):get(2))))
+    end
     
     -- Mean squared error criterion
     CRITERION = nn.MSECriterion()
