@@ -422,6 +422,42 @@ function nn_utils.getNumberOfParameters(net)
     return nparams
 end
 
+-- from https://github.com/torch/DEPRECEATED-torch7-distro/issues/47
+function nn_utils.zeroDataSize(data)
+    if type(data) == 'table' then
+        for i = 1, #data do
+            data[i] = nn_utils.zeroDataSize(data[i])
+        end
+    elseif type(data) == 'userdata' then
+        data = torch.Tensor():typeAs(data)
+    end
+    return data
+end
+
+-- from https://github.com/torch/DEPRECEATED-torch7-distro/issues/47
+-- Resize the output, gradInput, etc temporary tensors to zero (so that the on disk size is smaller)
+function nn_utils.prepareNetworkForSave(node)
+    if node.output ~= nil then
+        node.output = nn_utils.zeroDataSize(node.output)
+    end
+    if node.gradInput ~= nil then
+        node.gradInput = nn_utils.zeroDataSize(node.gradInput)
+    end
+    if node.finput ~= nil then
+        node.finput = nn_utils.zeroDataSize(node.finput)
+    end
+    -- Recurse on nodes with 'modules'
+    if (node.modules ~= nil) then
+        if (type(node.modules) == 'table') then
+            for i = 1, #node.modules do
+                local child = node.modules[i]
+                nn_utils.prepareNetworkForSave(child)
+            end
+        end
+    end
+    collectgarbage()
+end
+
 -- Contains the pixels necessary to draw digits 0 to 9
 CHAR_TENSORS = {}
 CHAR_TENSORS[0] = torch.Tensor({{1, 1, 1},

@@ -247,6 +247,8 @@ function saveAs(filename)
       os.execute(string.format("mv %s %s.old", filename, filename))
     end
     print(string.format("<trainer> saving network to %s", filename))
+    NN_UTILS.prepareNetworkForSave(MODEL_G)
+    NN_UTILS.prepareNetworkForSave(MODEL_D)
     torch.save(filename, {D = MODEL_D, G = MODEL_G, opt = OPT, plot_data = PLOT_DATA, epoch = EPOCH+1, normalize_mean=NORMALIZE_MEAN, normalize_std=NORMALIZE_STD})
 end
 

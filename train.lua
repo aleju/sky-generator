@@ -34,14 +34,13 @@ OPT = lapp[[
   --D_maxAcc         (default 1.01)         Deactivate learning of D while above this threshold
   --D_clamp          (default 1)            Clamp threshold for D's gradient (+/- N)
   --G_clamp          (default 5)            Clamp threshold for G's gradient (+/- N)
-  --D_optmethod      (default "adam")       adam|adagrad
-  --G_optmethod      (default "adam")       adam|adagrad
+  --D_optmethod      (default "adam")       adam|adagrad|sgd
+  --G_optmethod      (default "adam")       adam|adagrad|sgd
   --threads          (default 4)            number of threads
   --gpu              (default 0)            gpu to run on (default cpu)
   --noiseDim         (default 100)          dimensionality of noise vector
   --window           (default 3)            window id of sample image
-  --scale            (default 16)           scale of images to train on
-  --autoencoder      (default "")           path to autoencoder to load weights from
+  --scale            (default 32)           scale of images to train on
   --rebuildOptstate  (default 0)            whether to force a rebuild of the optimizer state
   --seed             (default 1)            seed for the RNG
   --weightsVisFreq   (default 0)            how often to update the weight visualization (requires starting with qlua, 0 is off)
@@ -131,7 +130,7 @@ function main()
         MODEL_D = tmp.D
         MODEL_G = tmp.G
         OPTSTATE = tmp.optstate
-        EPOCH = tmp.epoch
+        EPOCH = tmp.epoch + 1
         if NORMALIZE then
             NORMALIZE_MEAN = tmp.normalize_mean
             NORMALIZE_STD = tmp.normalize_std
@@ -160,34 +159,8 @@ function main()
         else
             print("<trainer> Note: Did not find pretrained G")
             
-            if OPT.autoencoder ~= "" then
-                -- Create G as a refiner of an autoencoder. Old stuff that probably doesn't even
-                -- work anymore
-                local left = nn.Sequential()
-                left:add(nn.View(INPUT_SZ))
-                local right = nn.Sequential()
-                right:add(nn.View(INPUT_SZ))
-                right:add(nn.Linear(INPUT_SZ, 1024))
-                right:add(nn.PReLU())
-                right:add(nn.BatchNormalization(1024))
-                right:add(nn.Linear(1024, 1024))
-                right:add(nn.PReLU())
-                right:add(nn.BatchNormalization(1024))
-                right:add(nn.Linear(1024, INPUT_SZ))
-                right:add(nn.Tanh())
-                right:add(nn.MulConstant(0.25))
-          
-                local concat = nn.ConcatTable()
-                concat:add(left)
-                concat:add(right)
-                MODEL_G = nn.Sequential()
-                MODEL_G:add(concat)
-                MODEL_G:add(nn.CAddTable())
-                MODEL_G:add(nn.View(IMG_DIMENSIONS[1], IMG_DIMENSIONS[2], IMG_DIMENSIONS[3]))
-            else
-                -- Create a new G. See models.lua
-                MODEL_G = MODELS.create_G(IMG_DIMENSIONS, OPT.noiseDim)
-            end
+            -- Create a new G. See models.lua
+            MODEL_G = MODELS.create_G(IMG_DIMENSIONS, OPT.noiseDim)
         end
     end
 
@@ -197,37 +170,6 @@ function main()
     -- count free parameters in D/G
     print(string.format('Number of free parameters in D: %d', NN_UTILS.getNumberOfParameters(MODEL_D)))
     print(string.format('Number of free parameters in G: %d', NN_UTILS.getNumberOfParameters(MODEL_G)))
-
-    if OPT.autoencoder == "" then
-        print("[INFO] No Autoencoder network specified, will not use an autoencoder.")
-    else
-        -- If G was created as a refiner of an autoencoder, load the autoencoder now.
-        -- Old stuff that probably doesn't even work anymore.
-        print("<trainer> Loading autoencoder")
-        local tmp = torch.load(OPT.autoencoder)
-        local savedAutoencoder = tmp.AE
-
-        MODEL_AE = nn.Sequential()
-        MODEL_AE:add(nn.Linear(OPT.noiseDim, 256))
-        MODEL_AE:add(nn.ReLU())
-        MODEL_AE:add(nn.Linear(256, INPUT_SZ))
-        MODEL_AE:add(nn.Sigmoid())
-        MODEL_AE:add(nn.View(OPT.geometry[1], OPT.geometry[2], OPT.geometry[3]))
-
-        -- Set weights of the autoencoder in a needlesly complicated way.
-        local mapping = {{1,6+1}, {3,6+3}, {5,6+5}}
-        for i=1, #mapping do
-            print(string.format("Loading AE layer %d from autoencoder layer %d ...", mapping[i][1], mapping[i][2]))
-            local mapTo = mapping[i][1]
-            local mapFrom = mapping[i][2]
-            if MODEL_AE.modules[mapTo].weight and savedAutoencoder.modules[mapFrom].weight then
-                MODEL_AE.modules[mapTo].weight = savedAutoencoder.modules[mapFrom].weight
-            end
-            if MODEL_AE.modules[mapTo].bias and savedAutoencoder.modules[mapFrom].bias then
-                MODEL_AE.modules[mapTo].bias = savedAutoencoder.modules[mapFrom].bias
-            end
-        end
-    end
 
     -- Copy models to GPU
     if OPT.gpu then
@@ -315,7 +257,9 @@ function saveAs(filename)
       os.execute(string.format("mv %s %s.old", filename, filename))
     end
     print(string.format("<trainer> saving network to %s", filename))
-    torch.save(filename, {D = MODEL_D, G = MODEL_G, opt = OPT, plot_data = PLOT_DATA, epoch = EPOCH+1, normalize_mean=NORMALIZE_MEAN, normalize_std=NORMALIZE_STD})
+    NN_UTILS.prepareNetworkForSave(MODEL_G)
+    NN_UTILS.prepareNetworkForSave(MODEL_D)
+    torch.save(filename, {D = MODEL_D, G = MODEL_G, opt = OPT, plot_data = PLOT_DATA, epoch = EPOCH, normalize_mean=NORMALIZE_MEAN, normalize_std=NORMALIZE_STD})
 end
 
 main()
