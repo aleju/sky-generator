@@ -6,8 +6,14 @@ local dataset = {}
 
 -- load data from these directories
 dataset.dirs = {}
+
+-- load only images with unique filenames (basenames)
+-- i.e. if an image with name "foo.jpg" is in directory "a" and "b" ("a/foo.jpg", "b/foo.jpg"),
+-- it will only be loaded once
+dataset.uniqueFilenames = true
+
 -- load only images with these file extensions
-dataset.fileExtension = ""
+dataset.fileExtension = "jpg"
 
 -- expected original height/width of images
 dataset.originalHeight = 32
@@ -58,28 +64,49 @@ function dataset.loadPaths()
     local files = {}
     local dirs = dataset.dirs
     local ext = dataset.fileExtension
+    local added = {}
+    local nbIgnored = 0
 
     for i=1, #dirs do
         local dir = dirs[i]
+        local filesInDir = paths.files(dir)
+        local containsImages = false
+        
         -- Go over all files in directory. We use an iterator, paths.files().
-        for file in paths.files(dir) do
+        for file in filesInDir do
             -- We only load files that match the extension
             if file:find(ext .. '$') then
+                containsImages = true
+                
                 -- and insert the ones we care about in our table
-                table.insert(files, paths.concat(dir,file))
+                -- insert only if filename was not added yet (same file in another directory)
+                -- or if uniqueFilenames is false
+                local filename = paths.basename(file)
+                local notAddedYet = (added[filename] == nil)
+                if notAddedYet or not dataset.uniqueFilenames then
+                    table.insert(files, paths.concat(dir,file))
+                    added[filename] = true
+                else
+                    nbIgnored = nbIgnored + 1
+                end
             end
         end
 
-        -- sort for reproduceability
-        table.sort(files, function (a,b) return a < b end)
-
-        -- Check files
-        if #files == 0 then
-            error('given directory doesnt contain any files of type: ' .. ext)
+        -- Check if empty
+        -- filesInDir is an iterator, so we cant just check #filesInDir
+        if not containsImages then
+            error(string.format("[Dataset] Directory '%s' does not contain any files of type '%s'", dir, ext))
         end
     end
     
+    -- sort by filename (not full filepath)
+    -- a) for reproduceability
+    -- b) so that images of different keywords (directories) follow each other (instead of first
+    --    all images of one keyword, then all images of the next keyword...)
+    table.sort(files, function (a,b) return paths.basename(a) < paths.basename(b) end)
+    
     dataset.paths = files
+    print(string.format("[Dataset] Found %d filepaths in %d directories. Ignored %d filepaths because of duplicates.", #files, #dirs, nbIgnored))
 end
 
 -- Load images from the dataset.
@@ -98,6 +125,10 @@ function dataset.loadImages(startAt, count)
         local img = image.load(dataset.paths[i], dataset.nbChannels, "float")
         img = image.scale(img, dataset.width, dataset.height)
         images[i] = img
+        
+        if i % 2000 == 0 then
+            collectgarbage()
+        end
     end
     images = NN_UTILS.rgbToColorSpace(images, dataset.colorSpace)
 
