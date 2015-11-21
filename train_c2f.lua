@@ -96,7 +96,12 @@ DATASET.setFineWidth(OPT.fineSize * 2)
 if OPT.aws then
     DATASET.setDirs({"/mnt/datasets/out_aug_64x64"})
 else
-    DATASET.setDirs({"dataset/out_aug_32x64"})
+    DATASET.setDirs({
+        "dataset/preprocessed/sky",
+        "dataset/preprocessed/night%20sky",
+        "dataset/preprocessed/sunrise",
+        "dataset/preprocessed/sunset"
+    })
 end
 ----------------------------------------------------------------------
 
